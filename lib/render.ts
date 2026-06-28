@@ -1,4 +1,9 @@
-import type { Frame, OutputSettings, Point } from "./types";
+import type {
+  Frame,
+  OutputSettings,
+  Point,
+  TransitionType,
+} from "./types";
 import { loadBitmap } from "./imageUtils";
 import {
   defaultTargets,
@@ -20,7 +25,10 @@ export function countOutputFrames(
   settings: OutputSettings,
 ): number {
   const hold = Math.max(1, Math.round(settings.holdSec * settings.fps));
-  const trans = Math.max(1, Math.round(settings.transitionSec * settings.fps));
+  const trans =
+    settings.transition === "cut"
+      ? 0
+      : Math.max(1, Math.round(settings.transitionSec * settings.fps));
   // hold for each frame + a transition between each consecutive pair.
   return orderLength * hold + Math.max(0, orderLength - 1) * trans;
 }
@@ -30,12 +38,44 @@ function drawAligned(
   bitmap: ImageBitmap,
   m: Matrix,
   alpha: number,
+  offsetX = 0,
 ) {
   ctx.globalAlpha = alpha;
-  ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+  // setTransform is absolute, so bake any slide offset into the translation.
+  ctx.setTransform(m.a, m.b, m.c, m.d, m.e + offsetX, m.f);
   ctx.drawImage(bitmap, 0, 0);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
+}
+
+/** Render one in-between frame for the chosen transition effect. */
+function drawTransition(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  fromBmp: ImageBitmap,
+  fromM: Matrix,
+  toBmp: ImageBitmap,
+  toM: Matrix,
+  type: Exclude<TransitionType, "cut">,
+  t: number, // 0..1 progress
+) {
+  const e = ease(t);
+  switch (type) {
+    case "dissolve":
+      drawAligned(ctx, fromBmp, fromM, 1);
+      drawAligned(ctx, toBmp, toM, e);
+      break;
+    case "fade":
+      // Dip through the white background at the midpoint.
+      drawAligned(ctx, fromBmp, fromM, Math.max(0, 1 - 2 * e));
+      drawAligned(ctx, toBmp, toM, Math.max(0, 2 * e - 1));
+      break;
+    case "slide":
+      // Outgoing photo slides left while the incoming one enters from the right.
+      drawAligned(ctx, fromBmp, fromM, 1, -e * size);
+      drawAligned(ctx, toBmp, toM, 1, size - e * size);
+      break;
+  }
 }
 
 function drawWatermark(ctx: CanvasRenderingContext2D, size: number) {
@@ -127,7 +167,10 @@ export async function renderTimeline(
 
   const order = buildOrder(frames.length, settings.pingPong);
   const hold = Math.max(1, Math.round(settings.holdSec * settings.fps));
-  const trans = Math.max(1, Math.round(settings.transitionSec * settings.fps));
+  const isCut = settings.transition === "cut";
+  const trans = isCut
+    ? 0
+    : Math.max(1, Math.round(settings.transitionSec * settings.fps));
   const total = countOutputFrames(order.length, settings);
 
   const out: Uint8Array[] = [];
@@ -157,14 +200,22 @@ export async function renderTimeline(
       drawAligned(ctx, bitmaps[idx], matrices[idx], 1);
       await emit();
     }
-    // Crossfade into the next frame in the order.
-    if (oi < order.length - 1) {
+    // Transition into the next frame in the order (skipped for hard cuts).
+    if (!isCut && oi < order.length - 1) {
       const nextIdx = order[oi + 1];
+      const effect = settings.transition as Exclude<TransitionType, "cut">;
       for (let t = 1; t <= trans; t++) {
-        const a = ease(t / (trans + 1));
         clear();
-        drawAligned(ctx, bitmaps[idx], matrices[idx], 1);
-        drawAligned(ctx, bitmaps[nextIdx], matrices[nextIdx], a);
+        drawTransition(
+          ctx,
+          size,
+          bitmaps[idx],
+          matrices[idx],
+          bitmaps[nextIdx],
+          matrices[nextIdx],
+          effect,
+          t / (trans + 1),
+        );
         await emit();
       }
     }

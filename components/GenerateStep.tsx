@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Frame, OutputSettings } from "@/lib/types";
+import type { Frame, OutputSettings, TransitionType } from "@/lib/types";
 import { renderTimeline } from "@/lib/render";
 import { encode } from "@/lib/encode";
 import { recordGeneration } from "@/lib/history";
@@ -21,6 +21,13 @@ const SPEED_PRESETS = {
   빠르게: { holdSec: 0.12, transitionSec: 0.28 },
 } as const;
 type SpeedKey = keyof typeof SPEED_PRESETS;
+
+const TRANSITIONS: { key: TransitionType; label: string }[] = [
+  { key: "dissolve", label: "디졸브" },
+  { key: "fade", label: "페이드" },
+  { key: "slide", label: "슬라이드" },
+  { key: "cut", label: "컷(전환없음)" },
+];
 
 export default function GenerateStep({
   frames,
@@ -206,6 +213,20 @@ export default function GenerateStep({
           {(Object.keys(SPEED_PRESETS) as SpeedKey[]).map((k) => (
             <Pill key={k} active={speed === k} onClick={() => setSpeed(k)}>
               {k}
+            </Pill>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="전환 효과">
+        <div className="grid grid-cols-2 gap-2">
+          {TRANSITIONS.map((tr) => (
+            <Pill
+              key={tr.key}
+              active={settings.transition === tr.key}
+              onClick={() => setSettings({ ...settings, transition: tr.key })}
+            >
+              {tr.label}
             </Pill>
           ))}
         </div>

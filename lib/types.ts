@@ -4,6 +4,9 @@ export type AlignMode = "face" | "manual";
 
 export type OutputFormat = "mp4" | "gif";
 
+/** Visual effect used between consecutive photos. */
+export type TransitionType = "dissolve" | "fade" | "slide" | "cut";
+
 export interface Point {
   x: number;
   y: number;
@@ -37,8 +40,10 @@ export interface OutputSettings {
   fps: number;
   /** Seconds each photo is held fully visible. */
   holdSec: number;
-  /** Seconds of crossfade between consecutive photos. */
+  /** Seconds of transition between consecutive photos. */
   transitionSec: number;
+  /** Which visual effect to use between photos. */
+  transition: TransitionType;
   /** Loop the sequence back to the first frame at the end. */
   pingPong: boolean;
   /** Whether the Morphoint watermark is burned in (false = premium). */
@@ -51,6 +56,7 @@ export const DEFAULT_SETTINGS: OutputSettings = {
   fps: 18,
   holdSec: 0.25,
   transitionSec: 0.45,
+  transition: "dissolve",
   pingPong: false,
   watermark: true,
 };
