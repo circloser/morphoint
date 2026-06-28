@@ -27,7 +27,6 @@ export default function AlignStep({
   );
   const [done, setDone] = useState(0);
   const [detectTotal, setDetectTotal] = useState(0);
-  const ranFor = useRef<string>("");
 
   // Per-photo safety timeout so one stuck image never freezes the whole step.
   const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
@@ -36,13 +35,15 @@ export default function AlignStep({
       new Promise<null>((res) => setTimeout(() => res(null), ms)),
     ]);
 
+  // Stable identity of the current photo set. We depend on THIS (not the
+  // `frames` array) so that calling setAnchors mid-run — which replaces the
+  // frames array — does NOT cancel and abort the in-flight detection loop.
+  const framesKey = frames.map((f) => f.id).join(",");
+
   // Auto-detect eyes when in face mode. Runs once per frame-set, sequentially
   // (MediaPipe processes one image at a time).
   useEffect(() => {
     if (mode !== "face") return;
-    const key = frames.map((f) => f.id).join(",");
-    if (ranFor.current === key) return;
-    ranFor.current = key;
 
     const todo = frames.filter((f) => !f.aligned);
     if (todo.length === 0) {
@@ -85,7 +86,7 @@ export default function AlignStep({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, frames]);
+  }, [mode, framesKey]);
 
   const allAligned = frames.every((f) => f.aligned);
   const pending = frames.filter((f) => !f.aligned).length;
