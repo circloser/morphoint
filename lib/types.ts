@@ -1,0 +1,59 @@
+// Shared types for the Morphoint pipeline.
+
+export type AlignMode = "face" | "manual";
+
+export type OutputFormat = "mp4" | "gif";
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** A single source photo plus everything we derive from it. */
+export interface Frame {
+  id: string;
+  file: File;
+  /** Object URL for preview (revoke on removal). */
+  url: string;
+  /** Natural pixel size of the decoded image. */
+  width: number;
+  height: number;
+  /**
+   * Two anchor points in *source image pixel* coordinates used to align this
+   * frame. For face mode these are the two eye/iris centers (auto-detected);
+   * for manual mode they are user-tapped reference points.
+   */
+  anchors?: [Point, Point];
+  /** True once anchors are known (auto-detected or manually set). */
+  aligned: boolean;
+  /** Face detection ran but found nothing → needs manual anchors. */
+  faceFailed?: boolean;
+}
+
+export interface OutputSettings {
+  format: OutputFormat;
+  /** Square output size in px (even number). */
+  size: number;
+  fps: number;
+  /** Seconds each photo is held fully visible. */
+  holdSec: number;
+  /** Seconds of crossfade between consecutive photos. */
+  transitionSec: number;
+  /** Loop the sequence back to the first frame at the end. */
+  pingPong: boolean;
+  /** Whether the Morphoint watermark is burned in (false = premium). */
+  watermark: boolean;
+}
+
+export const DEFAULT_SETTINGS: OutputSettings = {
+  format: "mp4",
+  size: 720,
+  fps: 18,
+  holdSec: 0.25,
+  transitionSec: 0.45,
+  pingPong: false,
+  watermark: true,
+};
+
+/** Free-tier cap on photos per project. */
+export const FREE_PHOTO_LIMIT = 5;
