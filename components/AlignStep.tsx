@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AlignMode, Frame, Point } from "@/lib/types";
-import { detectEyeAnchors } from "@/lib/faceAlign";
+import { detectEyeAnchors, warmUpFaceLandmarker } from "@/lib/faceAlign";
 import AlignedPreview from "./AlignedPreview";
 import ManualAnchorEditor from "./ManualAnchorEditor";
 import { ArrowLeft, ArrowRight, CheckIcon } from "./icons";
@@ -21,8 +21,20 @@ export default function AlignStep({
   onNext: () => void;
 }) {
   const [editing, setEditing] = useState<Frame | null>(null);
-  const [detecting, setDetecting] = useState(false);
+  // phase: idle → warming (one-time model load) → detecting → done
+  const [phase, setPhase] = useState<"idle" | "warming" | "detecting" | "done">(
+    "idle",
+  );
+  const [done, setDone] = useState(0);
+  const [detectTotal, setDetectTotal] = useState(0);
   const ranFor = useRef<string>("");
+
+  // Per-photo safety timeout so one stuck image never freezes the whole step.
+  const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+    Promise.race([
+      p,
+      new Promise<null>((res) => setTimeout(() => res(null), ms)),
+    ]);
 
   // Auto-detect eyes when in face mode. Runs once per frame-set, sequentially
   // (MediaPipe processes one image at a time).
@@ -32,25 +44,41 @@ export default function AlignStep({
     if (ranFor.current === key) return;
     ranFor.current = key;
 
+    const todo = frames.filter((f) => !f.aligned);
+    if (todo.length === 0) {
+      setPhase("done");
+      return;
+    }
+
     let cancelled = false;
     (async () => {
-      setDetecting(true);
-      for (const f of frames) {
-        if (f.aligned) continue;
+      setDone(0);
+      setDetectTotal(todo.length);
+      setPhase("warming");
+      try {
+        await warmUpFaceLandmarker();
+      } catch {
+        // Model failed to load → let users place anchors manually.
+        todo.forEach((f) => (f.faceFailed = true));
+        if (!cancelled) setPhase("done");
+        return;
+      }
+      if (cancelled) return;
+
+      setPhase("detecting");
+      for (const f of todo) {
+        if (cancelled) return;
         try {
-          const anchors = await detectEyeAnchors(f);
+          const anchors = await withTimeout(detectEyeAnchors(f), 12000);
           if (cancelled) return;
-          if (anchors) {
-            setAnchors(f.id, anchors);
-          } else {
-            // Mark as needing manual help without blocking the rest.
-            f.faceFailed = true;
-          }
+          if (anchors) setAnchors(f.id, anchors);
+          else f.faceFailed = true;
         } catch {
           if (!cancelled) f.faceFailed = true;
         }
+        if (!cancelled) setDone((n) => n + 1);
       }
-      if (!cancelled) setDetecting(false);
+      if (!cancelled) setPhase("done");
     })();
 
     return () => {
@@ -66,10 +94,15 @@ export default function AlignStep({
     <div className="animate-rise space-y-4 pb-28">
       <div className="rounded-xl bg-bg-soft px-4 py-3 text-sm text-fg-soft">
         {mode === "face" ? (
-          detecting ? (
+          phase === "warming" ? (
             <span className="flex items-center gap-2">
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-fg border-t-transparent" />
-              얼굴에서 눈 위치를 찾는 중…
+              AI 모델 준비 중… (최초 1회만 받아요)
+            </span>
+          ) : phase === "detecting" ? (
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-fg border-t-transparent" />
+              눈 위치를 찾는 중… ({done}/{detectTotal}장)
             </span>
           ) : pending === 0 ? (
             "모든 사진이 정렬됐어요. 미리보기를 확인하세요."
