@@ -7,6 +7,9 @@ export type OutputFormat = "mp4" | "gif";
 /** Visual effect used between consecutive photos. */
 export type TransitionType = "dissolve" | "fade" | "slide" | "cut";
 
+/** Output aspect ratio. 1:1 is free; portrait ratios are a premium perk. */
+export type AspectKey = "1:1" | "4:5" | "9:16";
+
 export interface Point {
   x: number;
   y: number;
@@ -35,8 +38,10 @@ export interface Frame {
 
 export interface OutputSettings {
   format: OutputFormat;
-  /** Square output size in px (even number). */
+  /** Base width in px (even number); height derives from `aspect`. */
   size: number;
+  /** Output aspect ratio (width:height). */
+  aspect: AspectKey;
   fps: number;
   /** Seconds each photo is held fully visible. */
   holdSec: number;
@@ -53,6 +58,7 @@ export interface OutputSettings {
 export const DEFAULT_SETTINGS: OutputSettings = {
   format: "mp4",
   size: 720,
+  aspect: "1:1",
   fps: 18,
   holdSec: 0.25,
   transitionSec: 0.45,

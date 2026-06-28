@@ -59,9 +59,14 @@ export function applyMatrix(m: Matrix, p: Point): Point {
  * Eyes sit slightly above the middle, comfortably apart — flattering for faces
  * and sensible for generic two-point alignment.
  */
-export function defaultTargets(size: number): [Point, Point] {
+export function defaultTargets(
+  width: number,
+  height: number = width,
+): [Point, Point] {
+  // Eyes sit slightly above the middle, comfortably apart. Positions scale with
+  // each axis so portrait crops keep the face nicely placed.
   return [
-    { x: size * 0.38, y: size * 0.44 },
-    { x: size * 0.62, y: size * 0.44 },
+    { x: width * 0.38, y: height * 0.44 },
+    { x: width * 0.62, y: height * 0.44 },
   ];
 }

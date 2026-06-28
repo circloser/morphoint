@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Frame, OutputSettings, TransitionType } from "@/lib/types";
+import type {
+  AspectKey,
+  Frame,
+  OutputSettings,
+  TransitionType,
+} from "@/lib/types";
 import { renderTimeline } from "@/lib/render";
 import { encode } from "@/lib/encode";
 import { recordGeneration } from "@/lib/history";
@@ -29,6 +34,12 @@ const TRANSITIONS: { key: TransitionType; label: string }[] = [
   { key: "cut", label: "컷(전환없음)" },
 ];
 
+const ASPECTS: { key: AspectKey; label: string; premium: boolean }[] = [
+  { key: "1:1", label: "정사각형", premium: false },
+  { key: "4:5", label: "세로 4:5", premium: true },
+  { key: "9:16", label: "세로 9:16", premium: true },
+];
+
 export default function GenerateStep({
   frames,
   settings,
@@ -52,7 +63,9 @@ export default function GenerateStep({
   );
   const [error, setError] = useState<string>("");
   const [speed, setSpeed] = useState<SpeedKey>("보통");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const resultRef = useRef<string | null>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
@@ -69,11 +82,19 @@ export default function GenerateStep({
       const effective: OutputSettings = {
         ...settings,
         ...SPEED_PRESETS[speed],
+        // Premium-only perks: fall back to safe defaults for free users.
         watermark: isPremium ? settings.watermark : true,
+        aspect: isPremium ? settings.aspect : "1:1",
       };
       const render = await renderTimeline(frames, effective, setRenderP);
       setPhase("encoding");
-      const blob = await encode(render, effective, setEncodeP);
+      let audio: { bytes: Uint8Array; ext: string } | undefined;
+      if (isPremium && audioFile && effective.format === "mp4") {
+        const buf = await audioFile.arrayBuffer();
+        const ext = audioFile.name.split(".").pop()?.toLowerCase() || "mp3";
+        audio = { bytes: new Uint8Array(buf), ext };
+      }
+      const blob = await encode(render, effective, setEncodeP, audio);
       if (resultRef.current) URL.revokeObjectURL(resultRef.current);
       const url = URL.createObjectURL(blob);
       resultRef.current = url;
@@ -249,6 +270,33 @@ export default function GenerateStep({
         </div>
       </Section>
 
+      <Section title="비율">
+        <div className="grid grid-cols-3 gap-2">
+          {ASPECTS.map((a) => {
+            const locked = a.premium && !isPremium;
+            return (
+              <Pill
+                key={a.key}
+                active={settings.aspect === a.key}
+                onClick={() =>
+                  locked
+                    ? onUpgrade()
+                    : setSettings({ ...settings, aspect: a.key })
+                }
+              >
+                {a.label}
+                {locked ? " 🔒" : ""}
+              </Pill>
+            );
+          })}
+        </div>
+        {!isPremium && (
+          <p className="text-xs text-fg-faint">
+            세로형(릴스·쇼츠·틱톡)은 프리미엄에서 풀려요.
+          </p>
+        )}
+      </Section>
+
       <Section title="화질">
         <div className="grid grid-cols-3 gap-2">
           {[480, 720, 1080].map((s) => {
@@ -266,6 +314,51 @@ export default function GenerateStep({
             );
           })}
         </div>
+      </Section>
+
+      <Section title="배경 음악">
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={(e) => {
+            setAudioFile(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+        {!isPremium ? (
+          <button onClick={onUpgrade} className="card flex w-full items-center justify-between p-3.5">
+            <span className="text-sm font-medium">
+              내 음악 넣기
+              <span className="block text-xs text-fg-faint">
+                MP4에 좋아하는 곡을 입혀요 (프리미엄)
+              </span>
+            </span>
+            <span className="chip chip-active">🔒 프리미엄</span>
+          </button>
+        ) : settings.format === "gif" ? (
+          <p className="rounded-xl bg-bg-soft px-3 py-2 text-xs text-fg-soft">
+            GIF에는 소리가 없어요. MP4를 선택하면 음악을 넣을 수 있어요.
+          </p>
+        ) : audioFile ? (
+          <div className="card flex items-center justify-between p-3.5">
+            <span className="truncate text-sm font-medium">🎵 {audioFile.name}</span>
+            <button
+              onClick={() => setAudioFile(null)}
+              className="ml-2 shrink-0 text-sm font-medium text-fg-soft underline underline-offset-2"
+            >
+              제거
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => audioInputRef.current?.click()}
+            className="card flex w-full items-center justify-center gap-2 p-3.5 text-sm font-medium text-fg-soft"
+          >
+            + 음악 파일 선택
+          </button>
+        )}
       </Section>
 
       <Section title="옵션">

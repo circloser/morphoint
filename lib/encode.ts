@@ -50,9 +50,14 @@ export async function encode(
   render: RenderResult,
   settings: OutputSettings,
   onProgress?: (p: number) => void,
+  audio?: { bytes: Uint8Array; ext: string },
 ): Promise<Blob> {
   const ff = await loadFFmpeg();
   const fps = settings.fps;
+  // Audio is only meaningful for MP4 (GIF has no sound).
+  const useAudio = audio && settings.format === "mp4";
+  const audioName = audio ? `audio.${audio.ext}` : "";
+  const durationSec = render.frames.length / fps;
 
   const progressHandler = ({ progress }: { progress: number }) => {
     if (Number.isFinite(progress)) {
@@ -65,6 +70,9 @@ export async function encode(
     // Write every frame into the in-memory FS.
     for (let i = 0; i < render.frames.length; i++) {
       await ff.writeFile(`f${pad(i)}.png`, render.frames[i]);
+    }
+    if (useAudio) {
+      await ff.writeFile(audioName, audio!.bytes);
     }
 
     if (settings.format === "gif") {
@@ -93,21 +101,35 @@ export async function encode(
       return toBlob(data, "image/gif");
     }
 
-    await ff.exec([
-      "-framerate",
-      String(fps),
-      "-i",
-      "f%05d.png",
+    const mp4Args = ["-framerate", String(fps), "-i", "f%05d.png"];
+    if (useAudio) mp4Args.push("-i", audioName);
+    mp4Args.push(
       "-c:v",
       "libx264",
       "-pix_fmt",
       "yuv420p",
       "-preset",
       "veryfast",
-      "-movflags",
-      "+faststart",
-      "out.mp4",
-    ]);
+    );
+    if (useAudio) {
+      // Mux the user's track, fixing output length to the video so a long song
+      // is trimmed (and a short one simply ends early).
+      mp4Args.push(
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-t",
+        durationSec.toFixed(3),
+      );
+    }
+    mp4Args.push("-movflags", "+faststart", "out.mp4");
+
+    await ff.exec(mp4Args);
     const data = await ff.readFile("out.mp4");
     return toBlob(data, "video/mp4");
   } finally {
@@ -116,6 +138,13 @@ export async function encode(
     for (let i = 0; i < render.frames.length; i++) {
       try {
         await ff.deleteFile(`f${pad(i)}.png`);
+      } catch {
+        /* file may not exist */
+      }
+    }
+    if (useAudio) {
+      try {
+        await ff.deleteFile(audioName);
       } catch {
         /* file may not exist */
       }

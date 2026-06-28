@@ -11,6 +11,23 @@ import {
   type Matrix,
 } from "./transform";
 
+/** Even number ≥ 2 (H.264/yuv420p require even dimensions). */
+function even(n: number): number {
+  return Math.max(2, Math.round(n / 2) * 2);
+}
+
+/** Output pixel dimensions derived from base width + aspect ratio. */
+export function outputDimensions(settings: OutputSettings): {
+  width: number;
+  height: number;
+} {
+  const w = settings.size;
+  let h = w;
+  if (settings.aspect === "4:5") h = (w * 5) / 4;
+  else if (settings.aspect === "9:16") h = (w * 16) / 9;
+  return { width: even(w), height: even(h) };
+}
+
 /** Build the playback order of frame indices, optionally bouncing back. */
 export function buildOrder(count: number, pingPong: boolean): number[] {
   const forward = Array.from({ length: count }, (_, i) => i);
@@ -51,7 +68,7 @@ function drawAligned(
 /** Render one in-between frame for the chosen transition effect. */
 function drawTransition(
   ctx: CanvasRenderingContext2D,
-  size: number,
+  width: number,
   fromBmp: ImageBitmap,
   fromM: Matrix,
   toBmp: ImageBitmap,
@@ -72,26 +89,30 @@ function drawTransition(
       break;
     case "slide":
       // Outgoing photo slides left while the incoming one enters from the right.
-      drawAligned(ctx, fromBmp, fromM, 1, -e * size);
-      drawAligned(ctx, toBmp, toM, 1, size - e * size);
+      drawAligned(ctx, fromBmp, fromM, 1, -e * width);
+      drawAligned(ctx, toBmp, toM, 1, width - e * width);
       break;
   }
 }
 
-function drawWatermark(ctx: CanvasRenderingContext2D, size: number) {
-  const fontSize = Math.round(size * 0.038);
+function drawWatermark(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+) {
+  const fontSize = Math.round(Math.min(width, height) * 0.038);
   ctx.save();
   ctx.font = `600 ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "right";
-  const pad = Math.round(size * 0.04);
+  const pad = Math.round(Math.min(width, height) * 0.04);
   const label = "✦ Morphoint";
   const metrics = ctx.measureText(label);
   // Soft dark pill behind the text for legibility on any photo.
   const w = metrics.width + fontSize;
   const h = fontSize * 1.7;
-  const x = size - pad;
-  const y = size - pad;
+  const x = width - pad;
+  const y = height - pad;
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = "#000000";
   roundRect(ctx, x - w, y - h + fontSize * 0.25, w, h, h / 2);
@@ -140,8 +161,8 @@ export async function renderTimeline(
   settings: OutputSettings,
   onProgress?: (p: number) => void,
 ): Promise<RenderResult> {
-  const size = settings.size;
-  const targets = defaultTargets(size);
+  const { width, height } = outputDimensions(settings);
+  const targets = defaultTargets(width, height);
 
   // Decode all bitmaps and precompute per-frame alignment matrices.
   const bitmaps: ImageBitmap[] = [];
@@ -159,8 +180,8 @@ export async function renderTimeline(
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false })!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
@@ -177,7 +198,7 @@ export async function renderTimeline(
   let done = 0;
 
   const emit = async () => {
-    if (settings.watermark) drawWatermark(ctx, size);
+    if (settings.watermark) drawWatermark(ctx, width, height);
     const blob: Blob = await new Promise((res) =>
       canvas.toBlob((b) => res(b!), "image/png"),
     );
@@ -189,7 +210,7 @@ export async function renderTimeline(
   const clear = () => {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, width, height);
   };
 
   for (let oi = 0; oi < order.length; oi++) {
@@ -208,7 +229,7 @@ export async function renderTimeline(
         clear();
         drawTransition(
           ctx,
-          size,
+          width,
           bitmaps[idx],
           matrices[idx],
           bitmaps[nextIdx],
@@ -222,5 +243,5 @@ export async function renderTimeline(
   }
 
   bitmaps.forEach((b) => b.close());
-  return { frames: out, width: size, height: size };
+  return { frames: out, width, height };
 }
