@@ -1,51 +1,47 @@
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { FaceDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 import type { Frame, Point } from "./types";
 
-// MediaPipe Face Landmarker (478 points incl. iris). We align on the two iris
-// centers because they are the most stable, well-defined "eye position" points
-// across very different photos (baby → adult).
-const LEFT_IRIS_CENTER = 468;
-const RIGHT_IRIS_CENTER = 473;
-// Fallbacks if iris points are absent: outer eye corners.
-const LEFT_EYE_CORNER = 33;
-const RIGHT_EYE_CORNER = 263;
+// We only need the two eye positions to align faces, so we use the lightweight
+// BlazeFace short-range *detector* (~230KB) instead of the heavy 478-point Face
+// Landmarker (~3.8MB). It returns 6 keypoints per face; index 0/1 are the eyes.
+// This is dramatically faster to download and to run, especially on phones.
+const RIGHT_EYE_KP = 0;
+const LEFT_EYE_KP = 1;
 
-// Faces are easily detected at low resolution. Decoding/detecting on a phone's
-// full 12MP photo is what makes this slow, so we downscale to this longest-edge
-// size first. Landmarks are normalized (0..1), so they still map back onto the
-// original full-resolution image exactly.
+// Faces detect fine at low resolution. Decoding/detecting a phone's full 12MP
+// photo is the main cost, so we downscale to this longest edge first. Keypoints
+// are normalized (0..1), so they still map back onto the full-res image exactly.
 const DETECT_MAX_EDGE = 512;
 
 const WASM_BASE =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+  "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
 
-let landmarkerPromise: Promise<FaceLandmarker> | null = null;
+let detectorPromise: Promise<FaceDetector> | null = null;
 
 /**
- * Lazily create (and cache) the FaceLandmarker. Runs entirely in the browser.
- * Uses the CPU delegate: for one-shot batch detection it avoids the WebGL
- * warm-up cost (which is slow/flaky on mobile Safari) and is plenty fast on the
- * downscaled images we feed it.
+ * Lazily create (and cache) the FaceDetector. Runs entirely in the browser.
+ * CPU delegate: with this tiny model, inference is a few tens of ms and we skip
+ * the WebGL warm-up that is slow/flaky on mobile Safari.
  */
-export function getFaceLandmarker(): Promise<FaceLandmarker> {
-  if (!landmarkerPromise) {
-    landmarkerPromise = (async () => {
+export function getFaceDetector(): Promise<FaceDetector> {
+  if (!detectorPromise) {
+    detectorPromise = (async () => {
       const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-      return FaceLandmarker.createFromOptions(fileset, {
+      return FaceDetector.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
         runningMode: "IMAGE",
-        numFaces: 1,
+        minDetectionConfidence: 0.4,
       });
     })();
   }
-  return landmarkerPromise;
+  return detectorPromise;
 }
 
 /** Kick off model + wasm download/init early (one-time cost). */
-export function warmUpFaceLandmarker(): Promise<FaceLandmarker> {
-  return getFaceLandmarker();
+export function warmUpFaceLandmarker(): Promise<FaceDetector> {
+  return getFaceDetector();
 }
 
 /** Decode a frame's image downscaled so detection is fast. */
@@ -63,33 +59,35 @@ async function loadDownscaled(frame: Frame): Promise<ImageBitmap> {
 
 /**
  * Detect the two eye anchor points (in source pixel coordinates) for one frame.
- * Returns null when no face is found, so the caller can fall back to manual
- * anchoring.
+ * Returns null when no face/eyes are found, so the caller can fall back to
+ * manual anchoring.
  */
 export async function detectEyeAnchors(
   frame: Frame,
 ): Promise<[Point, Point] | null> {
-  const landmarker = await getFaceLandmarker();
+  const detector = await getFaceDetector();
   const bitmap = await loadDownscaled(frame);
   try {
-    const result = landmarker.detect(bitmap);
-    const faces = result.faceLandmarks;
-    if (!faces || faces.length === 0) return null;
+    const result = detector.detect(bitmap);
+    const detections = result.detections;
+    if (!detections || detections.length === 0) return null;
 
-    const lm = faces[0];
-    const hasIris = lm.length > RIGHT_IRIS_CENTER;
-    const leftIdx = hasIris ? LEFT_IRIS_CENTER : LEFT_EYE_CORNER;
-    const rightIdx = hasIris ? RIGHT_IRIS_CENTER : RIGHT_EYE_CORNER;
+    // Pick the most confident face when several are present.
+    const best = detections.reduce((a, b) =>
+      (b.categories?.[0]?.score ?? 0) > (a.categories?.[0]?.score ?? 0) ? b : a,
+    );
+    const kp = best.keypoints;
+    if (!kp || kp.length <= LEFT_EYE_KP) return null;
 
     // Normalized coords → original full-resolution pixels.
     const toPixel = (i: number): Point => ({
-      x: lm[i].x * frame.width,
-      y: lm[i].y * frame.height,
+      x: kp[i].x * frame.width,
+      y: kp[i].y * frame.height,
     });
 
     // Keep a consistent left→right ordering so rotation never flips.
-    const p1 = toPixel(leftIdx);
-    const p2 = toPixel(rightIdx);
+    const p1 = toPixel(RIGHT_EYE_KP);
+    const p2 = toPixel(LEFT_EYE_KP);
     return p1.x <= p2.x ? [p1, p2] : [p2, p1];
   } finally {
     bitmap.close();
