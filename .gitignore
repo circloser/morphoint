@@ -39,6 +39,12 @@ yarn-error.log*
 # oh-my-claudecode local state
 /.omc/
 
+# cloudflare / opennext
+/.open-next/
+/.wrangler/
+.dev.vars
+cloudflare-env.d.ts
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
