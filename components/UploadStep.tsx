@@ -63,7 +63,7 @@ export default function UploadStep({
           <h2 className="text-sm font-semibold text-fg-soft">
             사진 {frames.length}장
           </h2>
-          {!isPremium && (
+          {!isPremium && FREE_PHOTO_LIMIT <= 50 && (
             <span className="text-xs text-fg-faint">
               무료 {FREE_PHOTO_LIMIT}장까지
             </span>

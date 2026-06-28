@@ -55,5 +55,9 @@ export const DEFAULT_SETTINGS: OutputSettings = {
   watermark: true,
 };
 
-/** Free-tier cap on photos per project. */
-export const FREE_PHOTO_LIMIT = 5;
+/**
+ * Free-tier cap on photos per project.
+ * Temporarily raised during the testing phase to effectively remove the limit.
+ * Restore to 5 (or the desired free cap) before monetized launch.
+ */
+export const FREE_PHOTO_LIMIT = 1000;
