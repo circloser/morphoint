@@ -8,6 +8,12 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "kv_namespaces": [
+    {
+      "binding": "SHARES",
+      "id": "bc007f19003e4999bdea7754d1315f7d"
+    }
+  ],
   "observability": {
     "enabled": true
   }

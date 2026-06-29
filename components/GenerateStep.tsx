@@ -10,6 +10,7 @@ import type {
 import { renderTimeline } from "@/lib/render";
 import { encode } from "@/lib/encode";
 import { recordGeneration } from "@/lib/history";
+import { uploadShare } from "@/lib/share";
 import {
   ArrowLeft,
   DownloadIcon,
@@ -58,14 +59,25 @@ export default function GenerateStep({
   const [phase, setPhase] = useState<Phase>("setup");
   const [renderP, setRenderP] = useState(0);
   const [encodeP, setEncodeP] = useState(0);
-  const [result, setResult] = useState<{ url: string; blob: Blob } | null>(
-    null,
-  );
+  const [result, setResult] = useState<{
+    url: string;
+    blob: Blob;
+    format: "mp4" | "gif";
+  } | null>(null);
   const [error, setError] = useState<string>("");
   const [speed, setSpeed] = useState<SpeedKey>("보통");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const resultRef = useRef<string | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  // Share-link state (uploads only the finished video, on explicit action).
+  const posterRef = useRef<Uint8Array | null>(null);
+  const [senderName, setSenderName] = useState("");
+  const [sharePhase, setSharePhase] = useState<
+    "idle" | "uploading" | "done" | "error"
+  >("idle");
+  const [shareUrl, setShareUrl] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -98,7 +110,11 @@ export default function GenerateStep({
       if (resultRef.current) URL.revokeObjectURL(resultRef.current);
       const url = URL.createObjectURL(blob);
       resultRef.current = url;
-      setResult({ url, blob });
+      // Stash a representative frame as the share/social poster.
+      posterRef.current = render.frames[Math.floor(render.frames.length / 2)];
+      setResult({ url, blob, format: effective.format });
+      setSharePhase("idle");
+      setShareUrl("");
       setPhase("done");
       recordGeneration({
         format: effective.format,
@@ -143,6 +159,52 @@ export default function GenerateStep({
     a.href = result.url;
     a.download = filename;
     a.click();
+  };
+
+  const createShareLink = async () => {
+    if (!result || !posterRef.current) return;
+    setSharePhase("uploading");
+    try {
+      const { url } = await uploadShare(result.blob, posterRef.current, {
+        format: result.format,
+        name: senderName.trim(),
+      });
+      setShareUrl(url);
+      setSharePhase("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "공유 링크 생성 실패");
+      setSharePhase("error");
+    }
+  };
+
+  const copyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+
+  const shareLink = async () => {
+    if (!shareUrl) return;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: "Morphoint",
+          text: senderName.trim()
+            ? `${senderName.trim()}님이 보낸 변화 영상 ✦`
+            : "변화 영상 ✦",
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        /* cancelled */
+      }
+    }
+    copyLink();
   };
 
   // ---- Progress view ----
@@ -201,6 +263,59 @@ export default function GenerateStep({
           {(result.blob.size / 1024 / 1024).toFixed(1)}MB ·{" "}
           {settings.format.toUpperCase()} · {settings.size}px
         </p>
+
+        {/* Share link — uploads only the finished video, on explicit action. */}
+        <div className="card mx-auto max-w-sm space-y-3 p-4 text-left">
+          {sharePhase !== "done" ? (
+            <>
+              <div>
+                <p className="text-sm font-semibold">공유 링크 만들기</p>
+                <p className="mt-0.5 text-xs text-fg-faint">
+                  링크로 누구에게나 보낼 수 있어요. 완성 영상만 업로드되고
+                  원본 사진은 올라가지 않아요.
+                </p>
+              </div>
+              <input
+                value={senderName}
+                onChange={(e) => setSenderName(e.target.value)}
+                placeholder="보내는 사람 (선택, 예: 엄마)"
+                maxLength={40}
+                className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-fg"
+              />
+              <button
+                onClick={createShareLink}
+                disabled={sharePhase === "uploading"}
+                className="btn btn-ghost w-full"
+              >
+                {sharePhase === "uploading" ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-fg border-t-transparent" />
+                    링크 만드는 중…
+                  </>
+                ) : (
+                  <>🔗 공유 링크 만들기</>
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold">공유 링크가 준비됐어요 ✦</p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="min-w-0 flex-1 rounded-xl border border-line bg-bg-soft px-3 py-2.5 text-xs"
+                />
+                <button onClick={copyLink} className="btn btn-ghost shrink-0 px-3">
+                  {copied ? "복사됨" : "복사"}
+                </button>
+              </div>
+              <button onClick={shareLink} className="btn btn-primary w-full">
+                <ShareIcon className="h-4 w-4" /> 링크 공유
+              </button>
+            </>
+          )}
+        </div>
 
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/90 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-md gap-2">
