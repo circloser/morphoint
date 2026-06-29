@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { Frame, Point } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Lets the user tap two reference points on a photo (e.g. two eyes, or two
@@ -17,6 +18,7 @@ export default function ManualAnchorEditor({
   onChange: (anchors: [Point, Point]) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const imgRef = useRef<HTMLImageElement>(null);
   const [pts, setPts] = useState<Point[]>(
     frame.anchors ? [...frame.anchors] : [],
@@ -51,14 +53,14 @@ export default function ManualAnchorEditor({
       <div className="flex items-center justify-between px-5 py-4 text-white">
         <span className="text-sm font-medium">
           {pts.length < 2
-            ? `기준점 ${pts.length + 1}/2 — 사진을 탭하세요`
-            : "두 기준점 설정 완료"}
+            ? t("anchor.step", { n: pts.length + 1 })
+            : t("anchor.done")}
         </span>
         <button
           onClick={onClose}
           className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black"
         >
-          완료
+          {t("anchor.close")}
         </button>
       </div>
 
@@ -71,7 +73,7 @@ export default function ManualAnchorEditor({
           <img
             ref={imgRef}
             src={frame.url}
-            alt="정렬할 사진"
+            alt=""
             draggable={false}
             className="max-h-[68vh] max-w-full rounded-2xl object-contain"
           />
@@ -90,8 +92,7 @@ export default function ManualAnchorEditor({
       </div>
 
       <p className="px-6 pb-8 text-center text-xs leading-5 text-white/70">
-        같은 두 지점을 모든 사진에서 똑같이 찍어주세요. 얼굴이면 양쪽 눈동자,
-        장소·식물이면 변하지 않는 두 모서리를 추천해요.
+        {t("anchor.help")}
       </p>
     </div>
   );

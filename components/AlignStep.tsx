@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AlignMode, Frame, Point } from "@/lib/types";
 import { detectEyeAnchors, warmUpFaceLandmarker } from "@/lib/faceAlign";
+import { useI18n } from "@/lib/i18n";
 import AlignedPreview from "./AlignedPreview";
 import ManualAnchorEditor from "./ManualAnchorEditor";
 import { ArrowLeft, ArrowRight, CheckIcon } from "./icons";
@@ -20,6 +21,7 @@ export default function AlignStep({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState<Frame | null>(null);
   // phase: idle → warming (one-time model load) → detecting → done
   const [phase, setPhase] = useState<"idle" | "warming" | "detecting" | "done">(
@@ -98,20 +100,20 @@ export default function AlignStep({
           phase === "warming" ? (
             <span className="flex items-center gap-2">
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-fg border-t-transparent" />
-              AI 모델 준비 중… (최초 1회만 받아요)
+              {t("align.warming")}
             </span>
           ) : phase === "detecting" ? (
             <span className="flex items-center gap-2">
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-fg border-t-transparent" />
-              눈 위치를 찾는 중… ({done}/{detectTotal}장)
+              {t("align.detecting", { done, total: detectTotal })}
             </span>
           ) : pending === 0 ? (
-            "모든 사진이 정렬됐어요. 미리보기를 확인하세요."
+            t("align.allDone")
           ) : (
-            `${pending}장은 얼굴을 못 찾았어요. 탭해서 두 눈을 직접 찍어주세요.`
+            t("align.someFailed", { n: pending })
           )
         ) : (
-          "각 사진을 탭해 같은 두 기준점을 찍어주세요. (예: 양쪽 모서리)"
+          t("align.manualHint")
         )}
       </div>
 
@@ -145,10 +147,10 @@ export default function AlignStep({
             >
               {f.aligned ? (
                 <>
-                  <CheckIcon className="h-3 w-3" /> 정렬됨
+                  <CheckIcon className="h-3 w-3" /> {t("align.aligned")}
                 </>
               ) : (
-                "기준점 필요"
+                t("align.needAnchor")
               )}
             </span>
           </button>
@@ -173,7 +175,7 @@ export default function AlignStep({
             disabled={!allAligned}
             className="btn btn-primary flex-1"
           >
-            {allAligned ? "다음 — 영상 만들기" : `${pending}장 더 정렬해주세요`}
+            {allAligned ? t("align.next") : t("align.needN", { n: pending })}
             {allAligned && <ArrowRight className="h-4 w-4" />}
           </button>
         </div>

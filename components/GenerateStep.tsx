@@ -11,6 +11,7 @@ import { renderTimeline } from "@/lib/render";
 import { encode } from "@/lib/encode";
 import { recordGeneration } from "@/lib/history";
 import { uploadShare } from "@/lib/share";
+import { useI18n } from "@/lib/i18n";
 import {
   ArrowLeft,
   DownloadIcon,
@@ -22,23 +23,18 @@ import {
 type Phase = "setup" | "rendering" | "encoding" | "done" | "error";
 
 const SPEED_PRESETS = {
-  느리게: { holdSec: 0.45, transitionSec: 0.7 },
-  보통: { holdSec: 0.25, transitionSec: 0.45 },
-  빠르게: { holdSec: 0.12, transitionSec: 0.28 },
+  slow: { holdSec: 0.45, transitionSec: 0.7 },
+  normal: { holdSec: 0.25, transitionSec: 0.45 },
+  fast: { holdSec: 0.12, transitionSec: 0.28 },
 } as const;
 type SpeedKey = keyof typeof SPEED_PRESETS;
 
-const TRANSITIONS: { key: TransitionType; label: string }[] = [
-  { key: "dissolve", label: "디졸브" },
-  { key: "fade", label: "페이드" },
-  { key: "slide", label: "슬라이드" },
-  { key: "cut", label: "컷(전환없음)" },
-];
+const TRANSITIONS: TransitionType[] = ["dissolve", "fade", "slide", "cut"];
 
-const ASPECTS: { key: AspectKey; label: string; premium: boolean }[] = [
-  { key: "1:1", label: "정사각형", premium: false },
-  { key: "4:5", label: "세로 4:5", premium: true },
-  { key: "9:16", label: "세로 9:16", premium: true },
+const ASPECTS: { key: AspectKey; premium: boolean }[] = [
+  { key: "1:1", premium: false },
+  { key: "4:5", premium: true },
+  { key: "9:16", premium: true },
 ];
 
 export default function GenerateStep({
@@ -64,8 +60,9 @@ export default function GenerateStep({
     blob: Blob;
     format: "mp4" | "gif";
   } | null>(null);
+  const { t } = useI18n();
   const [error, setError] = useState<string>("");
-  const [speed, setSpeed] = useState<SpeedKey>("보통");
+  const [speed, setSpeed] = useState<SpeedKey>("normal");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const resultRef = useRef<string | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
@@ -124,7 +121,7 @@ export default function GenerateStep({
       });
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : "알 수 없는 오류가 발생했어요.");
+      setError(e instanceof Error ? e.message : t("gen.error"));
       setPhase("error");
     }
   };
@@ -142,7 +139,7 @@ export default function GenerateStep({
         await navigator.share({
           files: [file],
           title: "Morphoint",
-          text: "Morphoint로 만든 변화 영상 ✦",
+          text: "Morphoint ✦",
         });
         return;
       } catch {
@@ -172,7 +169,7 @@ export default function GenerateStep({
       setShareUrl(url);
       setSharePhase("done");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "공유 링크 생성 실패");
+      setError(e instanceof Error ? e.message : t("share.fail"));
       setSharePhase("error");
     }
   };
@@ -195,8 +192,8 @@ export default function GenerateStep({
         await navigator.share({
           title: "Morphoint",
           text: senderName.trim()
-            ? `${senderName.trim()}님이 보낸 변화 영상 ✦`
-            : "변화 영상 ✦",
+            ? `${senderName.trim()} ✦ Morphoint`
+            : "Morphoint ✦",
           url: shareUrl,
         });
         return;
@@ -221,11 +218,9 @@ export default function GenerateStep({
         </div>
         <div>
           <p className="text-lg font-semibold">
-            {phase === "rendering" ? "장면을 엮는 중…" : "영상으로 굽는 중…"}
+            {phase === "rendering" ? t("gen.rendering") : t("gen.encoding")}
           </p>
-          <p className="mt-1 text-sm text-fg-faint">
-            기기 안에서 처리돼요. 사진은 어디에도 올라가지 않아요.
-          </p>
+          <p className="mt-1 text-sm text-fg-faint">{t("gen.privacy")}</p>
         </div>
         <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-bg-soft">
           <div
@@ -242,11 +237,11 @@ export default function GenerateStep({
   if (phase === "done" && result) {
     return (
       <div className="animate-rise space-y-5 pb-28 text-center">
-        <h2 className="pt-2 text-xl font-semibold">완성됐어요 ✦</h2>
+        <h2 className="pt-2 text-xl font-semibold">{t("gen.done")}</h2>
         <div className="card mx-auto max-w-sm overflow-hidden p-0">
           {settings.format === "gif" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={result.url} alt="결과" className="w-full" />
+            <img src={result.url} alt="" className="w-full" />
           ) : (
             <video
               src={result.url}
@@ -269,16 +264,15 @@ export default function GenerateStep({
           {sharePhase !== "done" ? (
             <>
               <div>
-                <p className="text-sm font-semibold">공유 링크 만들기</p>
+                <p className="text-sm font-semibold">{t("share.make")}</p>
                 <p className="mt-0.5 text-xs text-fg-faint">
-                  링크로 누구에게나 보낼 수 있어요. 완성 영상만 업로드되고
-                  원본 사진은 올라가지 않아요.
+                  {t("share.makeDesc")}
                 </p>
               </div>
               <input
                 value={senderName}
                 onChange={(e) => setSenderName(e.target.value)}
-                placeholder="보내는 사람 (선택, 예: 엄마)"
+                placeholder={t("share.namePh")}
                 maxLength={40}
                 className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none focus:border-fg"
               />
@@ -290,16 +284,16 @@ export default function GenerateStep({
                 {sharePhase === "uploading" ? (
                   <>
                     <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-fg border-t-transparent" />
-                    링크 만드는 중…
+                    {t("share.making")}
                   </>
                 ) : (
-                  <>🔗 공유 링크 만들기</>
+                  <>{t("share.makeBtn")}</>
                 )}
               </button>
             </>
           ) : (
             <>
-              <p className="text-sm font-semibold">공유 링크가 준비됐어요 ✦</p>
+              <p className="text-sm font-semibold">{t("share.ready")}</p>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
@@ -307,11 +301,11 @@ export default function GenerateStep({
                   className="min-w-0 flex-1 rounded-xl border border-line bg-bg-soft px-3 py-2.5 text-xs"
                 />
                 <button onClick={copyLink} className="btn btn-ghost shrink-0 px-3">
-                  {copied ? "복사됨" : "복사"}
+                  {copied ? t("share.copied") : t("share.copy")}
                 </button>
               </div>
               <button onClick={shareLink} className="btn btn-primary w-full">
-                <ShareIcon className="h-4 w-4" /> 링크 공유
+                <ShareIcon className="h-4 w-4" /> {t("share.shareBtn")}
               </button>
             </>
           )}
@@ -320,10 +314,10 @@ export default function GenerateStep({
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/90 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-md gap-2">
             <button onClick={download} className="btn btn-ghost flex-1">
-              <DownloadIcon className="h-4 w-4" /> 저장
+              <DownloadIcon className="h-4 w-4" /> {t("gen.save")}
             </button>
             <button onClick={share} className="btn btn-primary flex-1">
-              <ShareIcon className="h-4 w-4" /> 공유
+              <ShareIcon className="h-4 w-4" /> {t("gen.share")}
             </button>
           </div>
         </div>
@@ -335,7 +329,7 @@ export default function GenerateStep({
           }}
           className="text-sm font-medium text-fg-soft underline underline-offset-4"
         >
-          설정 바꿔서 다시 만들기
+          {t("gen.again")}
         </button>
       </div>
     );
@@ -344,48 +338,48 @@ export default function GenerateStep({
   // ---- Setup view ----
   return (
     <div className="animate-rise space-y-5 pb-28">
-      <Section title="속도">
+      <Section title={t("gen.speed")}>
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(SPEED_PRESETS) as SpeedKey[]).map((k) => (
             <Pill key={k} active={speed === k} onClick={() => setSpeed(k)}>
-              {k}
+              {t(`gen.speed.${k}`)}
             </Pill>
           ))}
         </div>
       </Section>
 
-      <Section title="전환 효과">
+      <Section title={t("gen.transition")}>
         <div className="grid grid-cols-2 gap-2">
           {TRANSITIONS.map((tr) => (
             <Pill
-              key={tr.key}
-              active={settings.transition === tr.key}
-              onClick={() => setSettings({ ...settings, transition: tr.key })}
+              key={tr}
+              active={settings.transition === tr}
+              onClick={() => setSettings({ ...settings, transition: tr })}
             >
-              {tr.label}
+              {t(`tr.${tr}`)}
             </Pill>
           ))}
         </div>
       </Section>
 
-      <Section title="형식">
+      <Section title={t("gen.format")}>
         <div className="grid grid-cols-2 gap-2">
           <Pill
             active={settings.format === "mp4"}
             onClick={() => setSettings({ ...settings, format: "mp4" })}
           >
-            MP4 (영상)
+            {t("fmt.mp4")}
           </Pill>
           <Pill
             active={settings.format === "gif"}
             onClick={() => setSettings({ ...settings, format: "gif" })}
           >
-            GIF (움짤)
+            {t("fmt.gif")}
           </Pill>
         </div>
       </Section>
 
-      <Section title="비율">
+      <Section title={t("gen.aspect")}>
         <div className="grid grid-cols-3 gap-2">
           {ASPECTS.map((a) => {
             const locked = a.premium && !isPremium;
@@ -399,20 +393,18 @@ export default function GenerateStep({
                     : setSettings({ ...settings, aspect: a.key })
                 }
               >
-                {a.label}
+                {t(`asp.${a.key}`)}
                 {locked ? " 🔒" : ""}
               </Pill>
             );
           })}
         </div>
         {!isPremium && (
-          <p className="text-xs text-fg-faint">
-            세로형(릴스·쇼츠·틱톡)은 프리미엄에서 풀려요.
-          </p>
+          <p className="text-xs text-fg-faint">{t("gen.aspect.note")}</p>
         )}
       </Section>
 
-      <Section title="화질">
+      <Section title={t("gen.quality")}>
         <div className="grid grid-cols-3 gap-2">
           {[480, 720, 1080].map((s) => {
             const locked = s === 1080 && !isPremium;
@@ -431,7 +423,7 @@ export default function GenerateStep({
         </div>
       </Section>
 
-      <Section title="배경 음악">
+      <Section title={t("gen.music")}>
         <input
           ref={audioInputRef}
           type="file"
@@ -445,16 +437,16 @@ export default function GenerateStep({
         {!isPremium ? (
           <button onClick={onUpgrade} className="card flex w-full items-center justify-between p-3.5">
             <span className="text-sm font-medium">
-              내 음악 넣기
+              {t("music.add")}
               <span className="block text-xs text-fg-faint">
-                MP4에 좋아하는 곡을 입혀요 (프리미엄)
+                {t("music.add.desc")}
               </span>
             </span>
-            <span className="chip chip-active">🔒 프리미엄</span>
+            <span className="chip chip-active">{t("premium.chip")}</span>
           </button>
         ) : settings.format === "gif" ? (
           <p className="rounded-xl bg-bg-soft px-3 py-2 text-xs text-fg-soft">
-            GIF에는 소리가 없어요. MP4를 선택하면 음악을 넣을 수 있어요.
+            {t("music.gifNote")}
           </p>
         ) : audioFile ? (
           <div className="card flex items-center justify-between p-3.5">
@@ -463,7 +455,7 @@ export default function GenerateStep({
               onClick={() => setAudioFile(null)}
               className="ml-2 shrink-0 text-sm font-medium text-fg-soft underline underline-offset-2"
             >
-              제거
+              {t("upload.del")}
             </button>
           </div>
         ) : (
@@ -471,17 +463,17 @@ export default function GenerateStep({
             onClick={() => audioInputRef.current?.click()}
             className="card flex w-full items-center justify-center gap-2 p-3.5 text-sm font-medium text-fg-soft"
           >
-            + 음악 파일 선택
+            {t("music.pick")}
           </button>
         )}
       </Section>
 
-      <Section title="옵션">
+      <Section title={t("gen.options")}>
         <label className="card flex items-center justify-between p-3.5">
           <span className="text-sm font-medium">
-            왕복 재생
+            {t("opt.pingpong")}
             <span className="block text-xs text-fg-faint">
-              끝까지 갔다가 처음으로 부드럽게 (루프에 좋아요)
+              {t("opt.pingpong.desc")}
             </span>
           </span>
           <Toggle
@@ -491,9 +483,9 @@ export default function GenerateStep({
         </label>
         <label className="card flex items-center justify-between p-3.5">
           <span className="text-sm font-medium">
-            워터마크 제거
+            {t("opt.watermark")}
             <span className="block text-xs text-fg-faint">
-              {isPremium ? "프리미엄 사용 중" : "프리미엄에서 풀려요"}
+              {isPremium ? t("opt.watermark.on") : t("opt.watermark.off")}
             </span>
           </span>
           {isPremium ? (
@@ -503,7 +495,7 @@ export default function GenerateStep({
             />
           ) : (
             <button onClick={onUpgrade} className="chip chip-active">
-              🔒 프리미엄
+              {t("premium.chip")}
             </button>
           )}
         </label>
@@ -521,7 +513,7 @@ export default function GenerateStep({
             <ArrowLeft className="h-4 w-4" />
           </button>
           <button onClick={generate} className="btn btn-primary flex-1">
-            <SparkIcon className="h-4 w-4" /> 영상 만들기
+            <SparkIcon className="h-4 w-4" /> {t("gen.make")}
           </button>
         </div>
       </div>

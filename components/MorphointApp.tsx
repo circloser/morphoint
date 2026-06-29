@@ -10,6 +10,7 @@ import {
   isSupportedImage,
 } from "@/lib/imageUtils";
 import { usePremium } from "@/lib/premium";
+import { useI18n } from "@/lib/i18n";
 import Stepper from "./Stepper";
 import UploadStep from "./UploadStep";
 import AlignStep from "./AlignStep";
@@ -27,6 +28,7 @@ export default function MorphointApp() {
   const [step, setStep] = useState<Step>(0);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const { isPremium, setPremium } = usePremium();
+  const { t, lang, setLang } = useI18n();
 
   const addFiles = useCallback(
     async (list: FileList | File[]) => {
@@ -90,18 +92,25 @@ export default function MorphointApp() {
           Morphoint
         </button>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setLang(lang === "ko" ? "en" : "ko")}
+            className="flex h-9 items-center rounded-full bg-bg-soft px-3 text-[13px] font-semibold"
+            aria-label="Language"
+          >
+            {lang === "ko" ? "EN" : "한국어"}
+          </button>
           <Link
             href="/capture"
             className="flex h-9 items-center gap-1.5 rounded-full bg-bg-soft px-3 text-[13px] font-semibold"
           >
-            <CameraIcon className="h-4 w-4" /> 촬영
+            <CameraIcon className="h-4 w-4" /> {t("nav.capture")}
           </Link>
           {!isPremium && (
             <button
               onClick={() => setShowUpgrade(true)}
               className="flex h-9 items-center rounded-full bg-fg px-3 text-[13px] font-semibold text-white"
             >
-              프리미엄
+              {t("nav.premium")}
             </button>
           )}
         </div>
@@ -112,14 +121,11 @@ export default function MorphointApp() {
       {/* Intro shown only on the empty first step */}
       {step === 0 && frames.length === 0 && (
         <div className="animate-rise px-1 pb-4 pt-1 text-center">
-          <h1 className="text-2xl font-bold leading-snug tracking-tight">
-            변하는 순간을
-            <br />
-            자연스러운 영상으로
+          <h1 className="whitespace-pre-line text-2xl font-bold leading-snug tracking-tight">
+            {t("hero.title")}
           </h1>
           <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-fg-soft">
-            아기의 성장, 같은 장소의 변화, 자라는 식물 — 사진을 올리면 공통
-            지점을 맞춰 부드럽게 이어 드려요. 모든 처리는 내 폰 안에서.
+            {t("hero.sub")}
           </p>
         </div>
       )}

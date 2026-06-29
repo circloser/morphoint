@@ -1,13 +1,7 @@
 "use client";
 
 import { CheckIcon } from "./icons";
-
-const PERKS = [
-  "사진 무제한 업로드",
-  "워터마크 제거",
-  "1080p 고화질 출력",
-  "광고 없는 깔끔한 화면",
-];
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Upgrade sheet. Payments are out of scope this round, so the CTA simply
@@ -22,6 +16,8 @@ export default function UpgradeSheet({
   onClose: () => void;
   onUnlock: () => void;
 }) {
+  const { t } = useI18n();
+  const PERKS = [t("up.perk1"), t("up.perk2"), t("up.perk3"), t("up.perk4")];
   if (!open) return null;
   return (
     <div
@@ -33,10 +29,8 @@ export default function UpgradeSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-5 h-1.5 w-10 rounded-full bg-line" />
-        <h2 className="text-2xl font-bold tracking-tight">Morphoint 프리미엄</h2>
-        <p className="mt-1 text-sm text-fg-faint">
-          월 $1 — 가볍게, 더 멋지게 만드세요.
-        </p>
+        <h2 className="text-2xl font-bold tracking-tight">{t("up.title")}</h2>
+        <p className="mt-1 text-sm text-fg-faint">{t("up.price")}</p>
 
         <ul className="my-6 space-y-3">
           {PERKS.map((p) => (
@@ -50,16 +44,16 @@ export default function UpgradeSheet({
         </ul>
 
         <button onClick={onUnlock} className="btn btn-primary w-full">
-          프리미엄 시작하기
+          {t("up.start")}
         </button>
         <p className="mt-3 text-center text-[11px] leading-4 text-fg-faint">
-          결제 연동은 준비 중이에요. 지금은 체험으로 바로 켜집니다.
+          {t("up.note")}
         </p>
         <button
           onClick={onClose}
           className="mt-2 w-full py-2 text-sm font-medium text-fg-soft"
         >
-          나중에
+          {t("up.later")}
         </button>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CameraIcon, DownloadIcon } from "./icons";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Camera with a semi-transparent overlay of a reference photo, so the next
@@ -18,6 +19,7 @@ export default function CaptureCamera() {
   const [opacity, setOpacity] = useState(0.4);
   const [error, setError] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const { t } = useI18n();
 
   // (Re)start the stream whenever the facing mode changes.
   useEffect(() => {
@@ -40,9 +42,7 @@ export default function CaptureCamera() {
           await videoRef.current.play().catch(() => {});
         }
       } catch {
-        setError(
-          "카메라를 열 수 없어요. 브라우저 권한을 허용했는지 확인해주세요. (카메라는 https 또는 localhost에서만 동작해요)",
-        );
+        setError(t("cap.error"));
       }
     })();
     return () => {
@@ -106,14 +106,14 @@ export default function CaptureCamera() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <span className="rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium backdrop-blur">
-          촬영 보조
+          {t("cap.title")}
         </span>
         <button
           onClick={() =>
             setFacing((f) => (f === "user" ? "environment" : "user"))
           }
           className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 backdrop-blur"
-          aria-label="카메라 전환"
+          aria-label="Switch camera"
         >
           <CameraIcon className="h-5 w-5" />
         </button>
@@ -132,7 +132,7 @@ export default function CaptureCamera() {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={overlay}
-            alt="가이드"
+            alt=""
             className="pointer-events-none absolute inset-0 h-full w-full object-cover"
             style={{
               opacity,
@@ -150,7 +150,7 @@ export default function CaptureCamera() {
       {/* Controls */}
       <div className="relative z-20 space-y-4 bg-black/60 p-5 pb-8 backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
-          <span className="w-16 shrink-0 text-white/70">가이드</span>
+          <span className="w-16 shrink-0 text-white/70">{t("cap.guide")}</span>
           <input
             type="range"
             min={0}
@@ -175,13 +175,13 @@ export default function CaptureCamera() {
             onClick={() => fileRef.current?.click()}
             className="rounded-full bg-white/15 px-4 py-2.5 text-sm font-semibold"
           >
-            가이드 사진
+            {t("cap.guidePhoto")}
           </button>
 
           <button
             onClick={capture}
             className="flex h-18 w-18 items-center justify-center rounded-full border-4 border-white"
-            aria-label="촬영"
+            aria-label={t("cap.save")}
           >
             <span className="h-14 w-14 rounded-full bg-white transition active:scale-90" />
           </button>
@@ -190,12 +190,10 @@ export default function CaptureCamera() {
             onClick={capture}
             className="flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2.5 text-sm font-semibold"
           >
-            <DownloadIcon className="h-4 w-4" /> 저장
+            <DownloadIcon className="h-4 w-4" /> {t("cap.save")}
           </button>
         </div>
-        <p className="text-center text-xs text-white/50">
-          찍은 사진이 다음 가이드로 겹쳐져요. 같은 구도로 이어 찍어보세요.
-        </p>
+        <p className="text-center text-xs text-white/50">{t("cap.help")}</p>
       </div>
     </div>
   );

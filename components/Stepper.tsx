@@ -1,8 +1,10 @@
 "use client";
 
-const STEPS = ["사진", "정렬", "영상"] as const;
+import { useI18n } from "@/lib/i18n";
 
 export default function Stepper({ current }: { current: 0 | 1 | 2 }) {
+  const { t } = useI18n();
+  const STEPS = [t("step.photos"), t("step.align"), t("step.video")];
   return (
     <div className="flex items-center justify-center gap-2 py-3">
       {STEPS.map((label, i) => {

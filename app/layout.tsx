@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import RegisterSW from "@/components/RegisterSW";
+import Providers from "@/components/Providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,6 +15,13 @@ export const metadata: Metadata = {
     "사진 여러 장을 올리면 눈·코·입(또는 공통 지점)을 자동으로 맞춰 자연스럽게 변화하는 영상으로 만들어 드립니다. 아기의 성장, 같은 장소의 변화, 자라는 식물까지.",
   applicationName: "Morphoint",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -38,7 +47,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko" className={`${geistSans.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="min-h-full antialiased">
+        <Providers>{children}</Providers>
+        <RegisterSW />
+      </body>
     </html>
   );
 }
