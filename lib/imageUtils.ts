@@ -1,9 +1,28 @@
+import exifr from "exifr";
 import type { Frame } from "./types";
 
 let idCounter = 0;
 function nextId(): string {
   idCounter += 1;
   return `f${Date.now().toString(36)}_${idCounter}`;
+}
+
+/**
+ * When the photo was taken, in ms epoch. Prefers EXIF DateTimeOriginal (the
+ * actual shutter moment), falls back to the file's lastModified when the photo
+ * has no EXIF (screenshots, edited exports, messenger downloads).
+ */
+async function readTakenAt(file: File): Promise<number> {
+  try {
+    const tags = await exifr.parse(file, {
+      pick: ["DateTimeOriginal", "CreateDate"],
+    });
+    const d: unknown = tags?.DateTimeOriginal ?? tags?.CreateDate;
+    if (d instanceof Date && !Number.isNaN(d.getTime())) return d.getTime();
+  } catch {
+    /* no/broken EXIF — fall through */
+  }
+  return file.lastModified;
 }
 
 /**
@@ -26,6 +45,7 @@ export async function fileToFrame(file: File): Promise<Frame> {
     width,
     height,
     aligned: false,
+    takenAt: await readTakenAt(file),
   };
 }
 

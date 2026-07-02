@@ -31,7 +31,8 @@ const MESSAGES: Record<Lang, Record<string, string>> = {
     "upload.count": "사진 {n}장",
     "upload.freeLimit": "무료 {n}장까지",
     "upload.empty.title": "사진을 여러 장 선택하세요",
-    "upload.empty.sub": "시간 순서대로 정렬돼요",
+    "upload.empty.sub": "촬영 날짜순으로 자동 정렬돼요",
+    "upload.autoSorted": "📅 촬영 날짜순 자동 정렬됨",
     "upload.add": "추가",
     "upload.limitBanner":
       "무료 버전은 {n}장까지예요. 더 많은 사진은 프리미엄에서 풀려요.",
@@ -150,7 +151,8 @@ const MESSAGES: Record<Lang, Record<string, string>> = {
     "upload.count": "{n} photos",
     "upload.freeLimit": "Up to {n} free",
     "upload.empty.title": "Pick several photos",
-    "upload.empty.sub": "They’ll be ordered by time",
+    "upload.empty.sub": "Auto-ordered by the date taken",
+    "upload.autoSorted": "📅 Auto-sorted by date taken",
     "upload.add": "Add",
     "upload.limitBanner":
       "The free version allows up to {n} photos. More are unlocked with Premium.",

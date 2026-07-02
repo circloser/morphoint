@@ -34,6 +34,11 @@ export interface Frame {
   aligned: boolean;
   /** Face detection ran but found nothing → needs manual anchors. */
   faceFailed?: boolean;
+  /**
+   * When the photo was taken (ms epoch) — EXIF DateTimeOriginal when present,
+   * otherwise the file's lastModified. Used to auto-sort uploads by time.
+   */
+  takenAt: number;
 }
 
 export interface OutputSettings {

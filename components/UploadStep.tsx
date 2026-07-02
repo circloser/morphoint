@@ -22,6 +22,7 @@ export default function UploadStep({
   moveFrame,
   onNext,
   isPremium,
+  autoSorted,
 }: {
   frames: Frame[];
   mode: AlignMode;
@@ -31,6 +32,7 @@ export default function UploadStep({
   moveFrame: (id: string, dir: -1 | 1) => void;
   onNext: () => void;
   isPremium: boolean;
+  autoSorted: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const atLimit = !isPremium && frames.length >= FREE_PHOTO_LIMIT;
@@ -67,10 +69,17 @@ export default function UploadStep({
           <h2 className="text-sm font-semibold text-fg-soft">
             {t("upload.count", { n: frames.length })}
           </h2>
-          {!isPremium && FREE_PHOTO_LIMIT <= 50 && (
+          {autoSorted ? (
             <span className="text-xs text-fg-faint">
-              {t("upload.freeLimit", { n: FREE_PHOTO_LIMIT })}
+              {t("upload.autoSorted")}
             </span>
+          ) : (
+            !isPremium &&
+            FREE_PHOTO_LIMIT <= 50 && (
+              <span className="text-xs text-fg-faint">
+                {t("upload.freeLimit", { n: FREE_PHOTO_LIMIT })}
+              </span>
+            )
           )}
         </div>
 

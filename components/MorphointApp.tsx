@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { AlignMode, Frame, OutputSettings, Point } from "@/lib/types";
 import { DEFAULT_SETTINGS, FREE_PHOTO_LIMIT } from "@/lib/types";
 import {
@@ -27,8 +27,12 @@ export default function MorphointApp() {
   const [settings, setSettings] = useState<OutputSettings>(DEFAULT_SETTINGS);
   const [step, setStep] = useState<Step>(0);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [autoSorted, setAutoSorted] = useState(false);
   const { isPremium, setPremium } = usePremium();
   const { t, lang, setLang } = useI18n();
+  // Once the user reorders by hand, stop re-sorting the whole list on add —
+  // their explicit order wins over EXIF dates.
+  const userReordered = useRef(false);
 
   const addFiles = useCallback(
     async (list: FileList | File[]) => {
@@ -43,7 +47,19 @@ export default function MorphointApp() {
           // Unsupported/undecodable image (e.g. HEIC on desktop Chrome) — skip.
         }
       }
-      if (decoded.length) setFrames((prev) => [...prev, ...decoded]);
+      if (decoded.length) {
+        setFrames((prev) => {
+          const merged = [...prev, ...decoded];
+          if (userReordered.current) {
+            // Respect the manual order; only sort the incoming batch.
+            decoded.sort((a, b) => a.takenAt - b.takenAt);
+            return [...prev, ...decoded];
+          }
+          merged.sort((a, b) => a.takenAt - b.takenAt);
+          setAutoSorted(merged.length > 1);
+          return merged;
+        });
+      }
     },
     [frames.length, isPremium],
   );
@@ -57,6 +73,8 @@ export default function MorphointApp() {
   }, []);
 
   const moveFrame = useCallback((id: string, dir: -1 | 1) => {
+    userReordered.current = true;
+    setAutoSorted(false);
     setFrames((prev) => {
       const i = prev.findIndex((f) => f.id === id);
       const j = i + dir;
@@ -141,6 +159,7 @@ export default function MorphointApp() {
             moveFrame={moveFrame}
             onNext={() => setStep(1)}
             isPremium={isPremium}
+            autoSorted={autoSorted}
           />
         )}
         {step === 1 && (
