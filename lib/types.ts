@@ -56,6 +56,10 @@ export interface OutputSettings {
   transition: TransitionType;
   /** Loop the sequence back to the first frame at the end. */
   pingPong: boolean;
+  /** Equalize brightness across photos to remove flicker. */
+  normalize: boolean;
+  /** Overlay the date each photo was taken. */
+  showDates: boolean;
   /** Whether the Morphoint watermark is burned in (false = premium). */
   watermark: boolean;
 }
@@ -69,6 +73,8 @@ export const DEFAULT_SETTINGS: OutputSettings = {
   transitionSec: 0.45,
   transition: "dissolve",
   pingPong: false,
+  normalize: true,
+  showDates: false,
   watermark: true,
 };
 

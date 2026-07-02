@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import RegisterSW from "@/components/RegisterSW";
 import Providers from "@/components/Providers";
+import Analytics from "@/components/Analytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +51,7 @@ export default function RootLayout({
       <body className="min-h-full antialiased">
         <Providers>{children}</Providers>
         <RegisterSW />
+        <Analytics />
       </body>
     </html>
   );

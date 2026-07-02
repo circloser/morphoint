@@ -36,6 +36,20 @@ export function recordGeneration(rec: GenerationRecord): void {
   } catch {
     /* analytics is best-effort */
   }
+
+  // Mirror to GA4 when it's configured (see components/Analytics.tsx).
+  try {
+    const w = window as unknown as {
+      gtag?: (...args: unknown[]) => void;
+    };
+    w.gtag?.("event", "generate", {
+      format: rec.format,
+      frame_count: rec.frameCount,
+      size: rec.size,
+    });
+  } catch {
+    /* analytics is best-effort */
+  }
 }
 
 export function getLocalHistory(): (GenerationRecord & { t: number })[] {

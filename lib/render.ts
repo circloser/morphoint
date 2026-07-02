@@ -5,11 +5,7 @@ import type {
   TransitionType,
 } from "./types";
 import { loadBitmap } from "./imageUtils";
-import {
-  defaultTargets,
-  similarityFromAnchors,
-  type Matrix,
-} from "./transform";
+import { defaultTargets, similarityFromAnchors } from "./transform";
 
 /** Even number ≥ 2 (H.264/yuv420p require even dimensions). */
 function even(n: number): number {
@@ -50,49 +46,26 @@ export function countOutputFrames(
   return orderLength * hold + Math.max(0, orderLength - 1) * trans;
 }
 
-function drawAligned(
-  ctx: CanvasRenderingContext2D,
-  bitmap: ImageBitmap,
-  m: Matrix,
-  alpha: number,
-  offsetX = 0,
-) {
-  ctx.globalAlpha = alpha;
-  // setTransform is absolute, so bake any slide offset into the translation.
-  ctx.setTransform(m.a, m.b, m.c, m.d, m.e + offsetX, m.f);
-  ctx.drawImage(bitmap, 0, 0);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = 1;
+/** Smoothstep easing for a calmer crossfade. */
+function ease(t: number): number {
+  return t * t * (3 - 2 * t);
 }
 
-/** Render one in-between frame for the chosen transition effect. */
-function drawTransition(
+function roundRect(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  fromBmp: ImageBitmap,
-  fromM: Matrix,
-  toBmp: ImageBitmap,
-  toM: Matrix,
-  type: Exclude<TransitionType, "cut">,
-  t: number, // 0..1 progress
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
 ) {
-  const e = ease(t);
-  switch (type) {
-    case "dissolve":
-      drawAligned(ctx, fromBmp, fromM, 1);
-      drawAligned(ctx, toBmp, toM, e);
-      break;
-    case "fade":
-      // Dip through the white background at the midpoint.
-      drawAligned(ctx, fromBmp, fromM, Math.max(0, 1 - 2 * e));
-      drawAligned(ctx, toBmp, toM, Math.max(0, 2 * e - 1));
-      break;
-    case "slide":
-      // Outgoing photo slides left while the incoming one enters from the right.
-      drawAligned(ctx, fromBmp, fromM, 1, -e * width);
-      drawAligned(ctx, toBmp, toM, 1, width - e * width);
-      break;
-  }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 function drawWatermark(
@@ -123,26 +96,76 @@ function drawWatermark(
   ctx.restore();
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+function formatTakenAt(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`;
 }
 
-/** Smoothstep easing for a calmer crossfade. */
-function ease(t: number): number {
-  return t * t * (3 - 2 * t);
+/** Date pill in the bottom-left corner (opposite the watermark). */
+function drawDateLabel(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  text: string,
+) {
+  const fontSize = Math.round(Math.min(width, height) * 0.038);
+  ctx.save();
+  ctx.font = `600 ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  const pad = Math.round(Math.min(width, height) * 0.04);
+  const metrics = ctx.measureText(text);
+  const w = metrics.width + fontSize;
+  const h = fontSize * 1.7;
+  const x = pad;
+  const y = height - pad;
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = "#000000";
+  roundRect(ctx, x, y - h + fontSize * 0.25, w, h, h / 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, x + fontSize * 0.5, y - fontSize * 0.35);
+  ctx.restore();
+}
+
+/** Mean perceptual luminance of a canvas, sampled at low resolution. */
+function meanLuma(layer: HTMLCanvasElement): number {
+  const s = document.createElement("canvas");
+  s.width = 32;
+  s.height = 32;
+  const sctx = s.getContext("2d")!;
+  sctx.drawImage(layer, 0, 0, 32, 32);
+  const d = sctx.getImageData(0, 0, 32, 32).data;
+  let sum = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+  }
+  return sum / (d.length / 4);
+}
+
+/**
+ * Equalize brightness across pre-rendered layers so photos shot in different
+ * lighting don't flicker. Each layer is scaled toward the set's mean luminance
+ * with a clamped gain (one pixel pass per photo, not per output frame).
+ */
+function equalizeBrightness(layers: HTMLCanvasElement[]) {
+  const lumas = layers.map(meanLuma);
+  const target = lumas.reduce((a, b) => a + b, 0) / lumas.length;
+  layers.forEach((layer, i) => {
+    const gain = Math.min(1.35, Math.max(0.75, target / (lumas[i] || 1)));
+    if (Math.abs(gain - 1) < 0.02) return; // already close — skip the pass
+    const lctx = layer.getContext("2d")!;
+    const img = lctx.getImageData(0, 0, layer.width, layer.height);
+    const d = img.data;
+    for (let j = 0; j < d.length; j += 4) {
+      d[j] = Math.min(255, d[j] * gain);
+      d[j + 1] = Math.min(255, d[j + 1] * gain);
+      d[j + 2] = Math.min(255, d[j + 2] * gain);
+    }
+    lctx.putImageData(img, 0, 0);
+  });
 }
 
 export interface RenderResult {
@@ -155,6 +178,10 @@ export interface RenderResult {
 /**
  * Render the full aligned + crossfaded timeline to PNG frames, entirely on the
  * client. `onProgress` reports 0..1 over the rendering phase.
+ *
+ * Each source photo is aligned into an output-sized "layer" exactly once; the
+ * timeline then just composites layers. That keeps per-frame work tiny and
+ * lets us equalize brightness with a single pixel pass per photo.
  */
 export async function renderTimeline(
   frames: Frame[],
@@ -164,27 +191,43 @@ export async function renderTimeline(
   const { width, height } = outputDimensions(settings);
   const targets = defaultTargets(width, height);
 
-  // Decode all bitmaps and precompute per-frame alignment matrices.
-  const bitmaps: ImageBitmap[] = [];
-  const matrices: Matrix[] = [];
+  // Pre-render every photo aligned onto a white output-sized layer.
+  const layers: HTMLCanvasElement[] = [];
   for (const f of frames) {
     const bmp = await loadBitmap(f);
-    bitmaps.push(bmp);
     const anchors: [Point, Point] = f.anchors ?? [
       { x: f.width * 0.38, y: f.height * 0.44 },
       { x: f.width * 0.62, y: f.height * 0.44 },
     ];
-    matrices.push(
-      similarityFromAnchors(anchors[0], anchors[1], targets[0], targets[1]),
+    const m = similarityFromAnchors(
+      anchors[0],
+      anchors[1],
+      targets[0],
+      targets[1],
     );
+    const layer = document.createElement("canvas");
+    layer.width = width;
+    layer.height = height;
+    const lctx = layer.getContext("2d")!;
+    lctx.imageSmoothingEnabled = true;
+    lctx.imageSmoothingQuality = "high";
+    lctx.fillStyle = "#ffffff";
+    lctx.fillRect(0, 0, width, height);
+    lctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    lctx.drawImage(bmp, 0, 0);
+    lctx.setTransform(1, 0, 0, 1, 0, 0);
+    bmp.close();
+    layers.push(layer);
   }
+
+  if (settings.normalize && layers.length > 1) equalizeBrightness(layers);
+
+  const dates = frames.map((f) => formatTakenAt(f.takenAt));
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false })!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
 
   const order = buildOrder(frames.length, settings.pingPong);
   const hold = Math.max(1, Math.round(settings.holdSec * settings.fps));
@@ -197,7 +240,8 @@ export async function renderTimeline(
   const out: Uint8Array[] = [];
   let done = 0;
 
-  const emit = async () => {
+  const emit = async (dateIdx: number) => {
+    if (settings.showDates) drawDateLabel(ctx, width, height, dates[dateIdx]);
     if (settings.watermark) drawWatermark(ctx, width, height);
     const blob: Blob = await new Promise((res) =>
       canvas.toBlob((b) => res(b!), "image/png"),
@@ -208,40 +252,54 @@ export async function renderTimeline(
   };
 
   const clear = () => {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
   };
+
+  const drawLayer = (i: number, alpha = 1, offsetX = 0) => {
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(layers[i], offsetX, 0);
+    ctx.globalAlpha = 1;
+  };
+
+  const effect = settings.transition as Exclude<TransitionType, "cut">;
 
   for (let oi = 0; oi < order.length; oi++) {
     const idx = order[oi];
     // Hold current frame.
     for (let h = 0; h < hold; h++) {
       clear();
-      drawAligned(ctx, bitmaps[idx], matrices[idx], 1);
-      await emit();
+      drawLayer(idx);
+      await emit(idx);
     }
     // Transition into the next frame in the order (skipped for hard cuts).
     if (!isCut && oi < order.length - 1) {
       const nextIdx = order[oi + 1];
-      const effect = settings.transition as Exclude<TransitionType, "cut">;
-      for (let t = 1; t <= trans; t++) {
+      for (let ti = 1; ti <= trans; ti++) {
+        const t = ti / (trans + 1);
+        const e = ease(t);
         clear();
-        drawTransition(
-          ctx,
-          width,
-          bitmaps[idx],
-          matrices[idx],
-          bitmaps[nextIdx],
-          matrices[nextIdx],
-          effect,
-          t / (trans + 1),
-        );
-        await emit();
+        switch (effect) {
+          case "dissolve":
+            drawLayer(idx);
+            drawLayer(nextIdx, e);
+            break;
+          case "fade":
+            // Dip through the white background at the midpoint.
+            drawLayer(idx, Math.max(0, 1 - 2 * e));
+            drawLayer(nextIdx, Math.max(0, 2 * e - 1));
+            break;
+          case "slide":
+            // Outgoing slides left while the incoming enters from the right.
+            drawLayer(idx, 1, -e * width);
+            drawLayer(nextIdx, 1, width - e * width);
+            break;
+        }
+        // Label with whichever photo dominates this moment.
+        await emit(t < 0.5 ? idx : nextIdx);
       }
     }
   }
 
-  bitmaps.forEach((b) => b.close());
   return { frames: out, width, height };
 }

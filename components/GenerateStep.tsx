@@ -483,6 +483,30 @@ export default function GenerateStep({
         </label>
         <label className="card flex items-center justify-between p-3.5">
           <span className="text-sm font-medium">
+            {t("opt.normalize")}
+            <span className="block text-xs text-fg-faint">
+              {t("opt.normalize.desc")}
+            </span>
+          </span>
+          <Toggle
+            on={settings.normalize}
+            onChange={(v) => setSettings({ ...settings, normalize: v })}
+          />
+        </label>
+        <label className="card flex items-center justify-between p-3.5">
+          <span className="text-sm font-medium">
+            {t("opt.dates")}
+            <span className="block text-xs text-fg-faint">
+              {t("opt.dates.desc")}
+            </span>
+          </span>
+          <Toggle
+            on={settings.showDates}
+            onChange={(v) => setSettings({ ...settings, showDates: v })}
+          />
+        </label>
+        <label className="card flex items-center justify-between p-3.5">
+          <span className="text-sm font-medium">
             {t("opt.watermark")}
             <span className="block text-xs text-fg-faint">
               {isPremium ? t("opt.watermark.on") : t("opt.watermark.off")}
